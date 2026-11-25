@@ -1,34 +1,4 @@
-<!doctype html>
-<html lang="en-CA">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="{{DESCRIPTION}}">
-  <title>{{TITLE}} · CoolCode</title>
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs"></script>
-  {{VISIT_COUNTER}}
-</head>
-<body data-tool-id="{{TOOL_ID}}">
-  <a class="skip" href="#main">Skip to content</a>
-  <header><a href="https://coolcode.ca/">← CoolCode.ca</a><a href="{{SOURCE_URL}}">Source &amp; instructions ↗</a></header>
-  <main id="main">
-    <p class="eyebrow">Browser tool starter</p>
-    <h1>{{TITLE}}</h1>
-    <p class="intro">{{DESCRIPTION}}</p>
-    <section aria-labelledby="example-title">
-      <h2 id="example-title">Clean a list</h2>
-      <p>Trim spaces, skip blank lines and remove exact duplicates. Capitalization stays distinct.</p>
-      <div class="panels">
-        <div><label for="input">Your lines</label><textarea id="input" rows="10" maxlength="100000" spellcheck="false" placeholder="Paste one item per line"></textarea></div>
-        <div><label for="output">Cleaned lines</label><textarea id="output" rows="10" readonly spellcheck="false"></textarea></div>
-      </div>
-      <div class="actions"><button id="sample" type="button">Load example</button><button id="clear" type="button">Clear</button><button id="copy" type="button" hidden>Copy result</button></div>
-      <p id="status" role="status" aria-live="polite">Paste a list to begin.</p>
-      <noscript><p>This tool needs JavaScript to process your text. The source is available above.</p></noscript>
-    </section>
-    <aside aria-label="Privacy"><strong>Stays on your device.</strong> The browser processes your text in this tab. Reloading clears it.</aside>
-  </main>
-  <footer>Part of <a href="https://coolcode.ca/">the CoolCode collection</a>. {{ISSUE_LINK}}</footer>
-</body>
-</html>
+<!doctype html><html lang="en-CA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{{DESCRIPTION}}"><title>Find NASA photos, video and audio with source credits · CoolCode</title><link rel="stylesheet" href="./style.css"><script type="module" src="./app.mjs"></script>{{VISIT_COUNTER}}</head><body data-tool-id="{{TOOL_ID}}"><a class="skip" href="#main">Skip to content</a><header class="topbar"><a href="https://coolcode.ca/">← CoolCode.ca</a><a href="{{SOURCE_URL}}">Source &amp; guide ↗</a></header><main id="main"><section class="hero"><div><p class="eyebrow">NASA IMAGE &amp; VIDEO LIBRARY / RESEARCH DESK</p><h1>{{TITLE}}</h1><p class="intro">Find the moment.<br>Keep the story behind it.</p><p>Explore NASA photographs, footage and audio. Inspect source assets and collect your discoveries in private research boards.</p></div><div class="orbit" aria-hidden="true"><span class="planet"></span><span class="orbit-label">IMAGE · VIDEO · AUDIO</span><span class="orbit-number">01 / EXPLORE</span></div></section><nav class="tabs" aria-label="Workspace"><button data-tab="search" aria-pressed="true">Explore the library</button><button data-tab="boards" aria-pressed="false">My boards <span id="saved-count">0</span></button></nav>
+<section id="search-view"><form id="search-form" class="search-box"><label for="query">Mission, place, person or subject</label><div class="search-line"><input id="query" maxlength="200" placeholder="e.g. Apollo 11, Europa or Katherine Johnson" required><button type="submit" class="primary">Search NASA</button></div><div class="filters"><label>Media type<select id="media-type"><option value="all">All media</option><option value="image">Images</option><option value="video">Video</option><option value="audio">Audio</option></select></label><label>Source year from<input id="year-start" inputmode="numeric" maxlength="4" placeholder="Any year" pattern="[0-9]{4}"></label><label>Source year to<input id="year-end" inputmode="numeric" maxlength="4" placeholder="Any year" pattern="[0-9]{4}"></label></div><div id="presets" class="presets" aria-label="Starting points"></div></form><div class="section-heading"><h2>Discoveries</h2><span id="result-count">Follow your curiosity.</span></div><p id="search-status" class="status" role="status">Search on demand. No account or API key required.</p><div class="workspace"><div><div id="results" class="cards"></div><div class="pagination"><button id="previous" disabled>← Previous</button><span id="page-label"></span><button id="next" disabled>Next →</button></div></div><aside id="detail" class="detail"><p class="eyebrow">SOURCE INSPECTOR</p><h2>Every image has a history.</h2><p>Choose a result for its description, NASA credit, original asset links and captions where available.</p></aside></div></section>
+<section id="boards-view" hidden><div class="section-heading"><div><p class="eyebrow">COLLECT WITH CONTEXT</p><h2>My research boards</h2></div><div class="actions"><button id="export-json">Back up all boards</button><label class="button">Import backup<input id="import" type="file" accept=".json,application/json" hidden></label></div></div><p>Records and notes stay in this browser. Saved media files remain on NASA's servers. Back up your boards before clearing browser data.</p><div class="board-tools"><label>Choose a board<select id="board-filter"><option value="">All boards</option></select></label><label>Find a saved item<input id="saved-filter" placeholder="Search titles, IDs or notes"></label></div><div class="actions"><button id="export-credits">Export visible credits</button><button id="export-csv">Export visible CSV</button></div><p id="board-status" class="status" role="status"></p><div id="boards" class="cards"></div></section>
+<section class="notes"><div><h2>Keep your research private</h2><p>Queries, filters and selected IDs go directly to NASA. Previews load from NASA. Board names and notes stay on your device; saving is always your choice.</p></div><div><h2>A source link is not a licence</h2><p>Keep the recorded credit and check each source. NASA material can include third-party content, identifiable people and protected insignia. Dates and descriptions reflect source metadata.</p><a href="https://www.nasa.gov/nasa-brand-center/images-and-media/" target="_blank" rel="noopener noreferrer">Read NASA media usage guidelines ↗</a></div></section><noscript>JavaScript is required. You can browse <a href="https://images.nasa.gov/">NASA's image and video library</a> directly.</noscript></main><footer>Part of <a href="https://coolcode.ca/">CoolCode</a> · {{ISSUE_LINK}}</footer></body></html>

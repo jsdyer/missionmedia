@@ -1,37 +1,39 @@
-import { cleanLines } from './model.mjs';
-const input = document.querySelector('#input');
-const output = document.querySelector('#output');
-const status = document.querySelector('#status');
-const copy = document.querySelector('#copy');
-function update() {
-  const result = cleanLines(input.value);
-  output.value = result.text;
-  status.textContent = `${result.count} unique ${result.count === 1 ? 'line' : 'lines'}; ${result.removed} ${result.removed === 1 ? 'duplicate' : 'duplicates'} removed.`;
-  copy.disabled = result.count === 0;
+import {SCHEMA,searchURL,parseSearch,parseAssets,endpoint,sourceURL,nasaURL,saveItem,parseBoards,mergeBoards,credit,creditsText,creditsCSV,csv,bytes} from './model.mjs';
+const $=id=>document.getElementById(id),KEY='coolcode:missionmedia:boards';
+let config={pageSize:24,presets:[],defaultBoard:'My collection'},items=[],library=[],page=1,total=0,query='',searchController,detailController;
+const cache=new Map();
+const el=(tag,value,cls)=>{const n=document.createElement(tag);if(value!==undefined)n.textContent=value;if(cls)n.className=cls;return n;};
+function button(label,fn,cls=''){const b=el('button',label,cls);b.type='button';b.onclick=fn;return b;}
+function link(label,url){const a=el('a',label);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+function status(id,message,error=false){$(id).textContent=message;$(id).classList.toggle('error',error);}
+function download(name,data,type){const u=URL.createObjectURL(new Blob([data],{type})),a=el('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+async function getJSON(url,signal,optional=false){const r=await fetch(url,{signal,credentials:'omit',referrerPolicy:'no-referrer'});if(optional&&r.status===404)return null;if(!r.ok)throw Error('NASA returned HTTP '+r.status+'. Try again later or open the source.');if(Number(r.headers.get('content-length'))>12e6)throw Error('NASA response is too large.');const body=await r.text();if(body.length>12e6)throw Error('NASA response is too large.');return JSON.parse(body);}
+function tab(name){for(const n of ['search','boards'])$(n+'-view').hidden=n!==name;document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===name)));if(name==='boards')renderBoards();}
+function store(next){try{localStorage.setItem(KEY,JSON.stringify({schema:SCHEMA,items:next}));library=next;$('saved-count').textContent=library.length;return true;}catch{status('board-status','Browser storage is unavailable or full. Export your boards before leaving.',true);return false;}}
+function preview(item){const placeholder=()=>el('div',item.type==='audio'?'AUDIO':item.type==='video'?'VIDEO':'NASA','media-placeholder');if(!item.thumb)return placeholder();const image=el('img',undefined,'preview');image.src=item.thumb;image.alt='';image.loading='lazy';image.referrerPolicy='no-referrer';image.addEventListener('error',()=>image.replaceWith(placeholder()),{once:true});return image;}
+function card(item,saved=false){const c=el('article',undefined,'card');c.append(preview(item));const body=el('div',undefined,'card-body');body.append(el('span',item.type,'pill'),el('h3',item.title),el('p',[item.center,item.date?.slice(0,10)||'Source date not provided'].filter(Boolean).join(' · ')));if(saved){body.append(el('p','Board: '+item.board));if(item.notes)body.append(el('p',item.notes,'inline-note'));}const actions=el('div',undefined,'actions');actions.append(button(saved?'Inspect / edit':'Inspect & collect',()=>{tab('search');showDetail(item);}));if(saved)actions.append(button('Remove',()=>{if(confirm('Remove this media record and its notes from your local boards?')){store(library.filter(i=>i.id!==item.id));renderBoards();}}));body.append(actions);c.append(body);return c;}
+function renderResults(){$('results').replaceChildren(...items.map(i=>card(i)));if(!items.length)$('results').append(el('p',query?'No media on this page. Try a broader subject or remove the year filter.':'Search a mission, subject or person, or choose a starting point above.','empty'));$('result-count').textContent=query?total.toLocaleString()+' matching records':'Follow your curiosity.';$('previous').disabled=page<=1;$('next').disabled=page>=100||page*config.pageSize>=total;$('page-label').textContent=total?'Page '+page+' of '+Math.min(100,Math.ceil(total/config.pageSize)):'';}
+async function search(next=1){searchController?.abort();const active=new AbortController();searchController=active;try{query=$('query').value.trim();const opts={type:$('media-type').value,yearStart:$('year-start').value,yearEnd:$('year-end').value,page:next,pageSize:config.pageSize};const url=searchURL(query,opts);page=next;items=[];total=0;renderResults();status('search-status','Searching NASA’s public media library…');const timer=setTimeout(()=>active.abort(),25000);let d;try{d=await getJSON(url,active.signal);}finally{clearTimeout(timer);}if(active!==searchController)return;({items,total}=parseSearch(d));renderResults();status('search-status','Live metadata checked '+new Date().toLocaleString()+'. '+items.length+' results shown.'+(total>100*config.pageSize?' NASA exposes up to 100 pages; narrow the query to explore further.':''));const u=new URL(location.href);for(const [k,v] of Object.entries({q:query,type:opts.type,from:opts.yearStart,to:opts.yearEnd}))v?u.searchParams.set(k,v):u.searchParams.delete(k);history.replaceState(null,'',u);}catch(e){if(active!==searchController)return;status('search-status',e.name==='AbortError'?'Search timed out. Try again or open NASA’s library.':e.message,true);}}
+function renderDetail(item,detail=null,error=''){
+ const panel=$('detail');panel.replaceChildren(el('p','NASA MEDIA RECORD','eyebrow'),el('h2',item.title));panel.append(link('Open original NASA record ↗',sourceURL(item.id)));if(item.thumb){const image=preview(item);panel.append(image);}panel.append(el('p',item.description||'No description was supplied.'),el('p',credit(item),'source-credit'));
+ if(item.keywords?.length)panel.append(el('p','Keywords: '+item.keywords.join(' · '),'muted'));
+ panel.append(el('h3','Files & source metadata'));
+ if(!detail&&!error)panel.append(el('p','Loading the asset manifest…'));if(error)panel.append(el('p',error,'error'));
+ if(detail){if(detail.assets.length){const list=el('ul',undefined,'asset-list');for(const a of detail.assets){const li=el('li');li.append(link((a.original?'Original · ':'')+a.ext.toUpperCase()+' ↗',a.url),el('small',a.name),el('small',[a.width&&a.height?a.width+' × '+a.height+' px':'Dimensions not provided',bytes(a.size)].filter(Boolean).join(' · ')));list.append(li);}panel.append(list,el('p','Files open on NASA’s servers. Original labels follow NASA’s “~orig” filenames. Dimensions and sizes are shown only when NASA lists them; availability can change.','file-notice'));panel.append(button('Export asset manifest CSV',()=>download(item.id+'-assets.csv',csv([['File','Original marker','Dimensions','Bytes if listed','URL'],...detail.assets.map(a=>[a.name,a.original?'yes':'no',a.width&&a.height?a.width+'x'+a.height:'',a.size,a.url])]),'text/csv;charset=utf-8')));
+ const playable=detail.assets.find(a=>(item.type==='video'?a.ext==='mp4':item.type==='audio'?['mp3','m4a','wav'].includes(a.ext):false)&&!a.original)||detail.assets.find(a=>item.type==='video'?a.ext==='mp4':item.type==='audio'&&['mp3','m4a','wav'].includes(a.ext));
+ if(playable){const holder=el('div');holder.append(button('Load '+item.type+' preview',()=>{const player=el(item.type);player.controls=true;player.preload='metadata';player.src=playable.url;player.style.width='100%';holder.replaceChildren(player,el('p','Playback requests this file directly from NASA.','muted'));}));panel.append(holder);}
+ }else panel.append(el('p','No recognized media assets were listed. Open the original record.'));
+ if(detail.metadata)panel.append(el('p'),link('Open NASA’s full metadata JSON ↗',detail.metadata));
+ if(detail.caption)panel.append(el('p'),link('Open source captions ↗',detail.caption));else if(item.type!=='image')panel.append(el('p',detail.captionError?'Caption metadata could not be checked. Open the source record to check captions.':'No caption file was listed for this item.','caption-note'));
+ }
+ const old=library.find(i=>i.id===item.id),bl=el('label','Save to board'),b=el('input'),nl=el('label','Private research notes'),n=el('textarea');bl.htmlFor='board-name';b.id='board-name';b.maxLength=80;b.value=old?.board||config.defaultBoard||'My collection';b.setAttribute('list','board-names');const dl=el('datalist');dl.id='board-names';for(const name of [...new Set(library.map(i=>i.board))]){const o=el('option');o.value=name;dl.append(o);}nl.htmlFor='research-notes';n.id='research-notes';n.rows=4;n.maxLength=5000;n.value=old?.notes||'';n.placeholder='Why this matters, project context, further reading…';const message=el('p');message.id='detail-status';message.setAttribute('role','status');const actions=el('div',undefined,'actions');actions.append(button(old?'Save changes':'Save to board',()=>{const entry=saveItem(item,b.value,n.value),next=library.some(i=>i.id===item.id)?library.map(i=>i.id===item.id?entry:i):[...library,entry];if(next.length>300){message.textContent='Library limit: 300 items. Export and remove an item first.';return;}if(store(next)){message.textContent='Saved on this device.';renderBoards();}else message.textContent='Could not save. Browser storage is unavailable; export your existing boards to keep a backup.';},'primary'),button('Export this credit',()=>download(item.id+'-credit.txt',creditsText([item]),'text/plain;charset=utf-8')));panel.append(bl,b,dl,nl,n,actions,message,el('p','Metadata checked: '+(item.checkedAt?new Date(item.checkedAt).toLocaleString():'not recorded')+'. Saved records retain this date until replaced with a new search result.','muted'));
 }
-input.addEventListener('input', update);
-document.querySelector('#sample').addEventListener('click', () => {
-  input.value = '  Halifax\nLangley\nHalifax\n\nVancouver  ';
-  update();
-});
-document.querySelector('#clear').addEventListener('click', () => {
-  input.value = '';
-  update();
-  input.focus();
-});
-if (navigator.clipboard && window.isSecureContext) {
-  copy.hidden = false;
-  copy.disabled = true;
-  copy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(output.value);
-      status.textContent = 'Result copied.';
-    } catch {
-      output.focus();
-      output.select();
-      status.textContent = 'Copy was unavailable. The result is selected so you can copy it manually.';
-    }
-  });
-}
-// Namespace future preference storage as coolcode:<tool-id>:<key>.
-// Do not persist pasted text or uploads by default.
+async function showDetail(item){detailController?.abort();const active=new AbortController();detailController=active;renderDetail(item);$('detail').scrollIntoView({behavior:'smooth',block:'nearest'});const timer=setTimeout(()=>active.abort(),25000);try{let d=cache.get(item.id);if(!d){const [assets,metadata,captions]=await Promise.allSettled([getJSON(endpoint('asset',item.id),active.signal),getJSON(endpoint('metadata',item.id),active.signal,true),item.type==='image'?Promise.resolve(null):getJSON(endpoint('captions',item.id),active.signal,true)]);if(assets.status==='rejected')throw assets.reason;d={assets:parseAssets(assets.value,item),metadata:metadata.status==='fulfilled'?nasaURL(metadata.value?.location):null,caption:captions.status==='fulfilled'?nasaURL(captions.value?.location):null,captionError:captions.status==='rejected'};cache.set(item.id,d);}if(active!==detailController)return;renderDetail(item,d);}catch(e){if(active!==detailController)return;renderDetail(item,null,e.name==='AbortError'?'NASA asset lookup timed out. Open the source or retry.':'Could not inspect assets: '+e.message);}finally{clearTimeout(timer);}}
+function visible(){const board=$('board-filter').value,q=$('saved-filter').value.toLowerCase();return library.filter(i=>(!board||i.board===board)&&[i.title,i.id,i.notes,i.description].join(' ').toLowerCase().includes(q));}
+function renderBoards(){const old=$('board-filter').value;const all=el('option','All boards');all.value='';$('board-filter').replaceChildren(all);for(const name of [...new Set(library.map(i=>i.board))].sort()){const o=el('option',name);o.value=name;$('board-filter').append(o);}if([...$('board-filter').options].some(o=>o.value===old))$('board-filter').value=old;const shown=visible();$('boards').replaceChildren(...shown.map(i=>card(i,true)));if(!shown.length)$('boards').append(el('p',library.length?'No saved items match the selected board and filter.':'Your boards are empty. Inspect a search result and choose Save to board.','empty'));$('saved-count').textContent=library.length;}
+$('search-form').onsubmit=e=>{e.preventDefault();search(1);};$('previous').onclick=()=>search(page-1);$('next').onclick=()=>search(page+1);document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));$('board-filter').onchange=renderBoards;$('saved-filter').oninput=renderBoards;
+$('export-json').onclick=()=>download('missionmedia-boards.json',JSON.stringify({schema:SCHEMA,exportedAt:new Date().toISOString(),items:library},null,2),'application/json');$('export-credits').onclick=()=>download('missionmedia-credits.txt',creditsText(visible()),'text/plain;charset=utf-8');$('export-csv').onclick=()=>download('missionmedia-credits.csv',creditsCSV(visible()),'text/csv;charset=utf-8');
+$('import').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>5e6)throw Error('Choose a backup smaller than 5 MB.');const next=mergeBoards(library,parseBoards(await file.text())),added=next.length-library.length;if(store(next)){renderBoards();status('board-status','Imported '+added+' new items. Existing board placements and notes were kept.');}}catch(error){status('board-status','Import failed: '+error.message,true);}e.target.value='';};
+try{const raw=localStorage.getItem(KEY);if(raw)library=parseBoards(raw);}catch{status('board-status','Saved boards could not be read. Import a backup to recover them.',true);}
+try{config=await fetch('./config.json').then(r=>r.json());if(!Number.isInteger(config.pageSize)||config.pageSize<1||config.pageSize>100)config.pageSize=24;}catch{status('search-status','Starting points could not load. You can still enter any search.');}
+for(const p of config.presets||[])$('presets').append(button(p.label,()=>{$('query').value=p.query;search(1);}));renderResults();renderBoards();const params=new URLSearchParams(location.search);if(params.get('q')){$('query').value=params.get('q').slice(0,200);$('media-type').value=['image','video','audio'].includes(params.get('type'))?params.get('type'):'all';for(const [id,key] of [['year-start','from'],['year-end','to']])$(id).value=/^\d{4}$/.test(params.get(key)||'')?params.get(key):'';search(1);}

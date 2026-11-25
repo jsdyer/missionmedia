@@ -1,21 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanLines } from '../web/model.mjs';
-test('trims, removes blanks and preserves first-seen order', () => {
-  assert.deepEqual(cleanLines('  Halifax\nLangley\nHalifax\n\nVancouver  '), {
-    text: 'Halifax\nLangley\nVancouver', count: 3, removed: 1,
-  });
-});
-test('supports Windows and old Mac line endings', () => {
-  assert.equal(cleanLines('a\r\nb\ra').text, 'a\nb');
-});
-test('empty text and whitespace produce an empty result', () => {
-  assert.deepEqual(cleanLines(' \n\t'), { text: '', count: 0, removed: 0 });
-});
-test('preserves case and Unicode', () => {
-  assert.equal(cleanLines('Québec\nquébec\n東京\nQuébec').text, 'Québec\nquébec\n東京');
-});
-test('treats markup as ordinary text', () => {
-  assert.equal(cleanLines('<script>alert(1)</script>\n<script>alert(1)</script>').text, '<script>alert(1)</script>');
-});
-test('rejects non-text input', () => { assert.throws(() => cleanLines(null), TypeError); });
+import {SCHEMA,nasaURL,searchURL,parseSearch,parseAssets,saveItem,parseBoards,mergeBoards,credit,creditsCSV,sourceURL} from '../web/model.mjs';
+const raw={data:[{nasa_id:'Custom-900',title:'A test image',media_type:'image',date_created:'1969-07-11T00:00:00Z',center:'JSC',keywords:['Apollo']}],links:[{href:'http://images-assets.nasa.gov/image/Custom-900/Custom-900~orig.jpg',rel:'preview',width:1200,height:800,size:300000}]};
+const parsed=()=>parseSearch({collection:{metadata:{total_hits:1},items:[raw]}},'2026-01-01T00:00:00Z').items[0];
+test('arbitrary input and filters round trip without URL injection',()=>{const u=new URL(searchURL('Katherine Johnson & computers',{type:'video',yearStart:'1950',yearEnd:'2020',page:4}));assert.equal(u.searchParams.get('q'),'Katherine Johnson & computers');assert.equal(u.searchParams.get('media_type'),'video');assert.equal(u.searchParams.get('page'),'4');assert.equal(u.searchParams.get('year_start'),'1950');});
+test('search rejects empty, invalid filters and reversed dates',()=>{for(const args of [[''],['x',{page:101}],['x',{yearStart:'180'}],['x',{yearStart:'2020',yearEnd:'1960'}],['x',{type:'anything'}]])assert.throws(()=>searchURL(...args));});
+test('only known NASA HTTPS hosts become source links',()=>{assert.equal(nasaURL('http://images-assets.nasa.gov/image/a.jpg'),'https://images-assets.nasa.gov/image/a.jpg');for(const v of ['javascript:alert(1)','https://images-assets.nasa.gov.evil.test/a','https://u:p@images.nasa.gov/a','https://images.nasa.gov:8080/a','https://evil.test/a'])assert.equal(nasaURL(v),null);assert.throws(()=>sourceURL('../x'));});
+test('search normalizes source fields without inventing a source date',()=>{const i=parsed();assert.equal(i.id,'Custom-900');assert.equal(i.checkedAt,'2026-01-01T00:00:00Z');assert.equal(i.links[0].width,1200);const r=structuredClone(raw);delete r.data[0].date_created;r.data[0].title='<img src=x>Actual title';const a=parseSearch({collection:{metadata:{total_hits:1},items:[r]}}).items[0];assert.equal(a.date,'');assert.equal(a.title,'Actual title');assert.throws(()=>parseSearch({collection:{items:[]}}));});
+test('assets preserve originals and known dimensions, reject external assets',()=>{const a=parseAssets({collection:{items:[{href:raw.links[0].href},{href:'https://images-assets.nasa.gov/image/a~small.jpg'},{href:'https://evil.test/a.jpg'},{href:'https://images-assets.nasa.gov/image/meta.json'}]}},parsed());assert.equal(a.length,2);assert(a[0].original);assert.equal(a[0].width,1200);assert.equal(a[1].width,null);});
+test('board round trip preserves notes and actual checked timestamp',()=>{const i=saveItem(parsed(),'Moon research','Two\nlines');const output=parseBoards(JSON.stringify({schema:SCHEMA,items:[i]}));assert.deepEqual(output,[i]);assert.equal(output[0].checkedAt,'2026-01-01T00:00:00Z');});
+test('board imports reject invalid schemas, duplicate IDs and over-limit collections',()=>{const i=saveItem(parsed());assert.throws(()=>parseBoards({schema:'wrong',items:[]}));assert.throws(()=>parseBoards({schema:SCHEMA,items:[i,i]}));assert.throws(()=>parseBoards({schema:SCHEMA,items:Array(301).fill(i)}));assert.throws(()=>saveItem({id:'x',type:'wrong'}));});
+test('new arbitrary IDs import beyond presets without replacing local notes',()=>{const a=saveItem(parsed(),'first','keep');const b=saveItem({...parsed(),id:'outside-default-900'},'Unlisted subject');const merged=mergeBoards([a],[{...a,notes:'overwrite'},b]);assert.equal(merged.length,2);assert.equal(merged[0].notes,'keep');assert.equal(merged[1].board,'Unlisted subject');});
+test('credit fallbacks are explicit and export does not invent photographers',()=>{const i=saveItem(parsed(),'=FORMULA',' notes');assert.match(credit(i),/NASA \/ JSC/);assert.match(credit(i),/1969-07-11/);const c=creditsCSV([i]);assert.match(c,/'=FORMULA/);assert.match(c,/"","JSC"/);});
